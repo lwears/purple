@@ -1,9 +1,17 @@
+# TODO: Remove Python 2 tools
+# 
 #!/bin/bash
 
 # check linux version
-DISTRIBUTION=$(grep "^ID=" /etc/os-release | cut -d\= -f2)
-UBUNTU_VER=$(grep "^DISTRIB_RELEASE=" /etc/upstream-release/lsb-release | cut -d\= -f2)
-DERIVITIVE=$(grep "^ID_LIKE=" /etc/os-release | cut -d\= -f2)
+DISTRIBUTION=$(grep "^ID=" /etc/os-release | cut -d\= -f2) # linuxmint, ubuntu, debian
+
+if [ "$DISTRIBUTION" == 'linuxmint' ]; then
+  UBUNTU_VER=$(grep "^DISTRIB_RELEASE=" /etc/upstream-release/lsb-release | cut -d\= -f2) # mint only
+elif [ "$DISTRIBUTION" == 'ubuntu' ]; then
+  UBUNTU_VER=$(grep "^VERSION_ID=" /etc/os-release | cut -d\= -f2) # mint only
+fi
+
+DERIVITIVE=$(grep "^ID_LIKE=" /etc/os-release | cut -d\= -f2) # e.g. linuxmint, ubuntu
 
 if [[ ! $DERIVITIVE == *"debian"* ]]; then
   echo "Nope. Only tested on Debian Derivitives, sorry." 1>&2
@@ -15,14 +23,14 @@ if [[ $EUID = 0 ]]; then
   exit 1
 fi
 # check ubuntu version
-py2_support() {
-  local codename=$(grep "^UBUNTU_CODENAME=" /etc/os-release | cut -d\= -f2)
-  # could just echo $codename == "bionic" directly
-  local py2=$(if [[ $codename == "bionic" ]]; then echo "true"; else echo "false"; fi)
-  echo $py2
-}
+# py2_support() {
+#   local codename=$(grep "^UBUNTU_CODENAME=" /etc/os-release | cut -d\= -f2)
+#   # could just echo $codename == "bionic" directly
+#   local py2=$(if [[ $codename == "bionic" ]]; then echo "true"; else echo "false"; fi)
+#   echo $py2
+# }
 
-HAS_PYTHON2=$(py2_support)
+#HAS_PYTHON2=$(py2_support)
 
 sudo bash -c 'echo -e "#!/bin/bash\nif [[ \$EUID = 0 ]]; then\n  echo \"1\"\n  exit 1\nfi\necho \"0\"" > /usr/bin/checksudo'
 sudo chmod +x /usr/bin/checksudo
@@ -87,11 +95,7 @@ then
 fi
 
 hash jq 2>/dev/null || { echo >&2 "something went wrong"; exit 1; }
-if [[ ! $HAS_PYTHON2 ]]; then
-  sudo apt-get -qq install python-is-python3
-else
-  sudo apt-get -qq install python-pip python-qt4
-fi
+sudo apt-get -qq install python-is-python3
 sudo apt-get -qq install ruby-dev ruby-bundler #ruby for beef & wpscan
 
 if [[ $DISTRIBUTION == 'ubuntu' ]]
@@ -109,11 +113,9 @@ cp .local/bin/pipx /usr/local/bin/
 # sudo PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx install PACKAGE
 
 clear && echo "-- Installing pip modules"
-if [[ ! $HAS_PYTHON2 ]]; then
-  sudo -H pip install -U pipenv
-  clear && python3 -m pipx install service_identity # https://service-identity.readthedocs.io/en/stable/
-  clear && python3 -m pipx install rdpy # https://github.com/citronneur/rdpy
-fi
+sudo -H pip install -U pipenv
+clear && python3 -m pipx install service_identity # https://service-identity.readthedocs.io/en/stable/
+clear && python3 -m pipx install rdpy # https://github.com/citronneur/rdpy
 sudo -H pip3 install -U pipenv
 
 clear && python3 -m pipx install pypykatz # https://github.com/skelsec/pypykatz
@@ -186,11 +188,7 @@ sudo nmap --script-updatedb
 
 clear && echo "-- Installing powershell"
 sudo apt-get -qq install wget apt-transport-https software-properties-common
-if [[ ! $HAS_PYTHON2 ]]; then
-  wget -q "https://packages.microsoft.com/config/ubuntu/$UBUNTU_VER/packages-microsoft-prod.deb"
-else
-  wget -q https://packages.microsoft.com/config/ubuntu/18.04/packages-microsoft-prod.deb
-fi
+wget -q "https://packages.microsoft.com/config/ubuntu/$UBUNTU_VER/packages-microsoft-prod.deb"
 sudo dpkg -i packages-microsoft-prod.deb
 sudo apt-get -qq update
 sudo apt-get -qq install -y powershell
@@ -863,18 +861,16 @@ check_app 'fluxion' '/usr/bin/fluxion'
 clear && echo "-- Installing John the Ripper"
 sudo apt-get -qq install john
 
-# Was there some issue with the apt installer?
 clear && echo "-- Installing hashcat"
-sudo apt-get -qq install hashcat -y
-# URL_HASHCAT=$(url_latest 'https://api.github.com/repos/hashcat/hashcat/releases/latest' 'hashcat')
-# cd /opt/
-# wget -q $URL_HASHCAT
-# 7zr -aos x hashcat-*.7z
-# sudo rm hashcat-*.7z
-# mv hashcat-*/ hashcat/
-# sudo ln -sf /opt/hashcat/hashcat.bin /usr/local/bin/hashcat
-# allows hashcat to work using cpu
-# https://software.intel.com/en-us/articles/opencl-drivers#latest_CPU_runtime
+URL_HASHCAT=$(url_latest 'https://api.github.com/repos/hashcat/hashcat/releases/latest' 'hashcat')
+cd /opt/
+wget -q $URL_HASHCAT
+7zr -aos x hashcat-*.7z
+sudo rm hashcat-*.7z
+mv hashcat-*/ hashcat/
+sudo ln -sf /opt/hashcat/hashcat.bin /usr/local/bin/hashcat
+allows hashcat to work using cpu
+https://software.intel.com/en-us/articles/opencl-drivers#latest_CPU_runtime
 
 cd /opt/
 wget -q $URL_OPENCL
@@ -942,37 +938,37 @@ sudo bash -c 'echo -e "#!/bin/bash\n(cd /opt/smuggler && if [ \$(checksudo) = 0 
 sudo chmod +x /usr/bin/smuggler
 check_app 'smuggler' '/opt/smuggler/smuggler.py'
 
-# clear && echo "-- Installing Swagger UI"
-# sudo apt-get -qq install npm
-# git clone -q --depth 1 'https://github.com/swagger-api/swagger-ui' '/opt/swagger-ui'
-# cd /opt/swagger-ui/
-# npm install
-# #npm run build
-# #sudo bash -c 'echo -e "#!/bin/bash\n(cd /opt/swagger-ui && if [ \$(checksudo) = 0 ]; then (npm start \"\$@\");fi)" > /usr/bin/swagger-ui'
-# #sudo chmod +x /usr/bin/swagger-ui
-# #sudo bash -c 'echo -e "#!/bin/bash\n(cd /opt/swagger-ui && if [ \$(checksudo) = 0 ]; then (npm run dev \"\$@\");fi)" > /usr/bin/swagger-ui-dev'
-# #sudo chmod +x /usr/bin/swagger-ui-dev
-# wget -q 'https://upload.wikimedia.org/wikipedia/commons/a/ab/Swagger-logo.png' -O '/opt/swagger-ui/logo.png'
-# sudo bash -c 'echo -e "#!/usr/bin/env xdg-open\n[Desktop Entry]\nType=Application\nName=Swagger UI\nExec=firefox /opt/swagger-ui/dist/index.html\nIcon=/opt/swagger-ui/logo.png\nCategories=Application;\nActions=app1;\n\n[Desktop Action app1]\nName=Start local dev build\nExec=gnome-terminal --window -- bash -c '\''cd /opt/swagger-ui && npm run dev'\''" > /usr/share/applications/swagger-ui.desktop'
-# # put local yaml/json files in dev-helpers folder
-# check_app 'swagger ui' '/opt/swagger-ui/dist/index.html'
+clear && echo "-- Installing Swagger UI"
+sudo apt-get -qq install npm
+git clone -q --depth 1 'https://github.com/swagger-api/swagger-ui' '/opt/swagger-ui'
+cd /opt/swagger-ui/
+npm install
+#npm run build
+#sudo bash -c 'echo -e "#!/bin/bash\n(cd /opt/swagger-ui && if [ \$(checksudo) = 0 ]; then (npm start \"\$@\");fi)" > /usr/bin/swagger-ui'
+#sudo chmod +x /usr/bin/swagger-ui
+#sudo bash -c 'echo -e "#!/bin/bash\n(cd /opt/swagger-ui && if [ \$(checksudo) = 0 ]; then (npm run dev \"\$@\");fi)" > /usr/bin/swagger-ui-dev'
+#sudo chmod +x /usr/bin/swagger-ui-dev
+wget -q 'https://upload.wikimedia.org/wikipedia/commons/a/ab/Swagger-logo.png' -O '/opt/swagger-ui/logo.png'
+sudo bash -c 'echo -e "#!/usr/bin/env xdg-open\n[Desktop Entry]\nType=Application\nName=Swagger UI\nExec=firefox /opt/swagger-ui/dist/index.html\nIcon=/opt/swagger-ui/logo.png\nCategories=Application;\nActions=app1;\n\n[Desktop Action app1]\nName=Start local dev build\nExec=gnome-terminal --window -- bash -c '\''cd /opt/swagger-ui && npm run dev'\''" > /usr/share/applications/swagger-ui.desktop'
+# put local yaml/json files in dev-helpers folder
+check_app 'swagger ui' '/opt/swagger-ui/dist/index.html'
 
-# clear && echo "-- Installing Swagger Editor"
-# git clone --depth 1 'https://github.com/swagger-api/swagger-editor' '/opt/swagger-editor'
-# cd /opt/swagger-editor/
-# #npm install
-# #npm run build
-# #sudo bash -c 'echo -e "#!/bin/bash\n(cd /opt/swagger-editor && if [ \$(checksudo) = 0 ]; then (npm start \"\$@\");fi)" > /usr/bin/swagger-editor'
-# #sudo chmod +x /usr/bin/swagger-editor
-# wget -q 'https://upload.wikimedia.org/wikipedia/commons/a/ab/Swagger-logo.png' -O '/opt/swagger-editor/logo.png'
-# sudo bash -c 'echo -e "#!/usr/bin/env xdg-open\n[Desktop Entry]\nType=Application\nName=Swagger Editor\nExec=firefox /opt/swagger-editor/index.html\nIcon=/opt/swagger-ui/logo.png\nCategories=Application;" > /usr/share/applications/swagger-editor.desktop'
-# check_app 'swagger editor' '/opt/swagger-editor/index.html'
+clear && echo "-- Installing Swagger Editor"
+git clone --depth 1 'https://github.com/swagger-api/swagger-editor' '/opt/swagger-editor'
+cd /opt/swagger-editor/
+#npm install
+#npm run build
+#sudo bash -c 'echo -e "#!/bin/bash\n(cd /opt/swagger-editor && if [ \$(checksudo) = 0 ]; then (npm start \"\$@\");fi)" > /usr/bin/swagger-editor'
+#sudo chmod +x /usr/bin/swagger-editor
+wget -q 'https://upload.wikimedia.org/wikipedia/commons/a/ab/Swagger-logo.png' -O '/opt/swagger-editor/logo.png'
+sudo bash -c 'echo -e "#!/usr/bin/env xdg-open\n[Desktop Entry]\nType=Application\nName=Swagger Editor\nExec=firefox /opt/swagger-editor/index.html\nIcon=/opt/swagger-ui/logo.png\nCategories=Application;" > /usr/share/applications/swagger-editor.desktop'
+check_app 'swagger editor' '/opt/swagger-editor/index.html'
 
-# clear && echo "-- Installing Swagger-EZ"
-# git clone --depth 1 'https://github.com/RhinoSecurityLabs/swagger-ez' '/opt/swagger-ez'
-# wget -q 'https://avatars0.githubusercontent.com/u/11430746' -O '/opt/swagger-ez/logo.png'
-# sudo bash -c 'echo -e "#!/usr/bin/env xdg-open\n[Desktop Entry]\nType=Application\nName=Swagger-EZ\nExec=firefox /opt/swagger-ez/index.html\nIcon=/opt/swagger-ez/logo.png\nCategories=Application;" > /usr/share/applications/swagger-ez.desktop'
-# check_app 'swagger-ez' '/opt/swagger-ez/index.html'
+clear && echo "-- Installing Swagger-EZ"
+git clone --depth 1 'https://github.com/RhinoSecurityLabs/swagger-ez' '/opt/swagger-ez'
+wget -q 'https://avatars0.githubusercontent.com/u/11430746' -O '/opt/swagger-ez/logo.png'
+sudo bash -c 'echo -e "#!/usr/bin/env xdg-open\n[Desktop Entry]\nType=Application\nName=Swagger-EZ\nExec=firefox /opt/swagger-ez/index.html\nIcon=/opt/swagger-ez/logo.png\nCategories=Application;" > /usr/share/applications/swagger-ez.desktop'
+check_app 'swagger-ez' '/opt/swagger-ez/index.html'
 
 clear && echo "-- Installing CyberChef"
 URL_CYBERCHEF=$(url_latest 'https://api.github.com/repos/gchq/cyberchef/releases/latest' 'CyberChef_')
@@ -1123,18 +1119,18 @@ sudo bash -c 'echo -e "#!/bin/bash\n(/opt/joomscan/joomscan.pl \"\$@\")" > /usr/
 sudo chmod +x /usr/bin/joomscan
 check_app 'joomscan' '/opt/joomscan/joomscan.pl'
 
-if [[ $HAS_PYTHON2 ]]; then # requires python 3.6, 3.8 used in Ubuntu 20.04
-  clear && echo "-- Installing ODAT: Oracle Database Attacking Tool"
-  URL_ODAT=$(url_latest 'https://api.github.com/repos/quentinhardy/odat/releases/latest' 'x86_64')
-  cd /opt/
-  wget -q $URL_ODAT
-  tar xvf odat*.tar.gz
-  sudo rm odat*.tar.gz
-  unzip -n odat*.zip
-  sudo rm odat*.zip
-  mv odat*/ odat/
-  sudo ln -sf /opt/odat/odat* /usr/local/bin/odat
-fi
+# if [[ $HAS_PYTHON2 ]]; then # requires python 3.6, 3.8 used in Ubuntu 20.04
+#   clear && echo "-- Installing ODAT: Oracle Database Attacking Tool"
+#   URL_ODAT=$(url_latest 'https://api.github.com/repos/quentinhardy/odat/releases/latest' 'x86_64')
+#   cd /opt/
+#   wget -q $URL_ODAT
+#   tar xvf odat*.tar.gz
+#   sudo rm odat*.tar.gz
+#   unzip -n odat*.zip
+#   sudo rm odat*.zip
+#   mv odat*/ odat/
+#   sudo ln -sf /opt/odat/odat* /usr/local/bin/odat
+# fi
 
 clear && echo "-- Installing fuxploider"
 git clone -q --depth 1 'https://github.com/almandin/fuxploider' '/opt/fuxploider'
